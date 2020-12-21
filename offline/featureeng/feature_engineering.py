@@ -14,17 +14,9 @@ from pyspark.ml.feature import OneHotEncoder, StringIndexer, QuantileDiscretizer
 from pyspark.sql import SparkSession, DataFrame
 import pyspark.sql.functions as F
 
-from offline.utils import get_root_path, udf_list2vec, print_info, udf_avg_rating_to_vec
+from offline.utils import get_root_path, udf_list2vec, print_info, udf_avg_rating_to_vec, load_data
 
 os.environ['PYSPARK_PYTHON'] = '/home/liam/anaconda3/bin/python'
-
-
-def load_data(spark):
-    movie_data_path = os.path.join(get_root_path(), "data/simple/movies.csv")
-    rating_data_path = os.path.join(get_root_path(), "data/simple/ratings.csv")
-    movie_data = spark.read.options(header=True).csv(movie_data_path)
-    rating_data = spark.read.options(header=True).csv(rating_data_path)
-    return movie_data, rating_data
 
 
 def one_hot_example(data: DataFrame):
