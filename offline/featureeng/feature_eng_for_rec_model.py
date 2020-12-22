@@ -8,11 +8,11 @@
 
 """
 import os
-
+import redis
 import pyspark.sql as sql
 from pyspark.sql import SparkSession, DataFrame
 import pyspark.sql.functions as F
-from pyspark.sql.types import LongType
+from pyspark.sql.types import LongType, Row
 
 from offline import config
 from offline.config import Config
@@ -122,14 +122,79 @@ def split_and_save_train_test_samples_by_timestamp(features: DataFrame, dir_path
 
 
 def extract_save_user_features_to_redis(features):
-    pass
+    samples = features.withColumn("userRowNum",
+                                  F.row_number().over(
+                                      sql.Window.partitionBy("userId").orderBy(F.col("timestamp").desc()))) \
+        .filter(F.col("userRowNum") == 1) \
+        .select("userId", "userRatedMovie1", "userRatedMovie2", "userRatedMovie3", "userRatedMovie4",
+                "userRatedMovie5", "userRatingCount", "userAvgReleaseYear", "userReleaseYearStddev",
+                "userAvgRating", "userRatingStddev", "userGenre1", "userGenre2", "userGenre3",
+                "userGenre4", "userGenre5").na.fill("")
+    pool = redis.ConnectionPool(host='localhost', port=6379, decode_responses=True)
+    r = redis.Redis(connection_pool=pool)
+    sample_array = samples.collect()
+    print(type(sample_array))
+    print("total user size: %d" % len(sample_array))
+    insert_user_number = 0
+    user_count = len(sample_array)
+    user_feature_prefix = "uf:"
+    for sample in sample_array:
+        user_key = user_feature_prefix + sample["userId"]
+        value_map = dict()
+        value_map["userRatedMovie1"] = sample["userRatedMovie1"]
+        value_map["userRatedMovie2"] = sample["userRatedMovie2"]
+        value_map["userRatedMovie3"] = sample["userRatedMovie3"]
+        value_map["userRatedMovie4"] = sample["userRatedMovie4"]
+        value_map["userRatedMovie5"] = sample["userRatedMovie5"]
+        value_map["userRatingCount"] = sample["userRatingCount"]
+        value_map["userAvgReleaseYear"] = sample["userAvgReleaseYear"]
+        value_map["userReleaseYearStddev"] = sample["userReleaseYearStddev"]
+        value_map["userAvgRating"] = sample["userAvgRating"]
+        value_map["userRatingStddev"] = sample["userRatingStddev"]
+        value_map["userGenre1"] = sample["userGenre1"]
+        value_map["userGenre2"] = sample["userGenre2"]
+        value_map["userGenre3"] = sample["userGenre3"]
+        value_map["userGenre4"] = sample["userGenre4"]
+        value_map["userGenre5"] = sample["userGenre5"]
+        r.hmset(user_key, value_map)
+        insert_user_number += 1
+        if insert_user_number % 100 == 0:
+            print("%d/%d..." % (insert_user_number, user_count))
+    r.close()
+    return samples
 
 
 def extract_and_save_movie_features_to_redis(features: DataFrame):
+    print_info(features)
     samples = features.withColumn("movieRowNum",
-                                  F.row_number().over(sql.Window.partitionBy("movieId").orderBy(F.col("timestamp").desc())))\
-        .filter(F.col("movieRowNum") == 1)
-    print_info(samples)
+                                  F.row_number().over(
+                                      sql.Window.partitionBy("movieId").orderBy(F.col("timestamp").desc()))) \
+        .filter(F.col("movieRowNum") == 1) \
+        .select("movieId", "releaseYear", "movieGenre1", "movieGenre2", "movieGenre3",
+                "movieRatingCount", "movieAvgRating", "movieRatingStddev").na.fill("")
+    pool = redis.ConnectionPool(host='localhost', port=6379, decode_responses=True)
+    r = redis.Redis(connection_pool=pool)
+    sample_array = samples.collect()
+    print("total user size: %d" % len(sample_array))
+    insert_movie_number = 0
+    movie_count = len(sample_array)
+    movie_feature_prefix = "mf:"
+    for sample in sample_array:
+        movie_key = movie_feature_prefix + sample["movieId"]
+        value_map = dict()
+        value_map["releaseYear"] = sample["releaseYear"]
+        value_map["movieGenre1"] = sample["movieGenre1"]
+        value_map["movieGenre2"] = sample["movieGenre2"]
+        value_map["movieGenre3"] = sample["movieGenre3"]
+        value_map["movieRatingCount"] = sample["movieRatingCount"]
+        value_map["movieAvgRating"] = sample["movieAvgRating"]
+        value_map["movieRatingStddev"] = sample["movieRatingStddev"]
+        r.hmset(movie_key, value_map)
+        insert_movie_number += 1
+        if insert_movie_number % 100 == 0:
+            print("%d/%d..." % (insert_movie_number, movie_count))
+    r.close()
+    return samples
 
 
 def main():
@@ -142,8 +207,8 @@ def main():
     sample_with_movie_features = add_movie_features(movie_data, rating_sample_with_label)
     sample_with_user_features = add_user_features(sample_with_movie_features)
 
-    # split_and_save_train_test_samples(sample_with_user_features, save_dir)
-    # split_and_save_train_test_samples_by_timestamp(sample_with_user_features, save_dir)
+    split_and_save_train_test_samples(sample_with_user_features, save_dir)
+    split_and_save_train_test_samples_by_timestamp(sample_with_user_features, save_dir)
 
     extract_and_save_movie_features_to_redis(sample_with_movie_features)
     extract_save_user_features_to_redis(sample_with_user_features)
