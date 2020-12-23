@@ -11,3 +11,7 @@ this is a python version of [SparrowRecSys](https://github.com/wzhe06/SparrowRec
  - feature_eng_for_rec_model
    - add_movie_features
    - add_user_features
+   
+ - embedding
+   - item2vec
+   - random_walk

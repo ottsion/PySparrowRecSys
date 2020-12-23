@@ -16,8 +16,8 @@ from pyspark.sql.types import LongType, Row
 
 from offline import config
 from offline.config import Config
-from offline.utils import load_data, print_info, udf_get_year_from_title, udf_get_title_from_title, udf_extract_genres, \
-    get_root_path
+from offline.utils import load_data, print_info, get_root_path
+from offline.udfs import udf_get_year_from_title, udf_get_title_from_title, udf_extract_genres
 
 os.environ['PYSPARK_PYTHON'] = '/home/liam/anaconda3/bin/python'
 
@@ -137,9 +137,8 @@ def extract_save_user_features_to_redis(features):
     print("total user size: %d" % len(sample_array))
     insert_user_number = 0
     user_count = len(sample_array)
-    user_feature_prefix = "uf:"
     for sample in sample_array:
-        user_key = user_feature_prefix + sample["userId"]
+        user_key = Config.user_feature_prefix + sample["userId"]
         value_map = dict()
         value_map["userRatedMovie1"] = sample["userRatedMovie1"]
         value_map["userRatedMovie2"] = sample["userRatedMovie2"]
@@ -178,9 +177,8 @@ def extract_and_save_movie_features_to_redis(features: DataFrame):
     print("total user size: %d" % len(sample_array))
     insert_movie_number = 0
     movie_count = len(sample_array)
-    movie_feature_prefix = "mf:"
     for sample in sample_array:
-        movie_key = movie_feature_prefix + sample["movieId"]
+        movie_key = Config.movie_feature_prefix + sample["movieId"]
         value_map = dict()
         value_map["releaseYear"] = sample["releaseYear"]
         value_map["movieGenre1"] = sample["movieGenre1"]
